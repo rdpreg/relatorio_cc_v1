@@ -270,9 +270,12 @@ def executar():
 
                 # 📱 ENVIAR WHATSAPP
                 if telefone_assessor:
+                    # Ordenar clientes por Saldo CC (maior para menor) e pegar top 10
+                    grupo_ordenado = grupo.sort_values("Saldo CC", ascending=False).head(10)
+                    
                     # Montar lista de clientes para WhatsApp
                     lista_clientes = ""
-                    for _, cliente in grupo.iterrows():
+                    for _, cliente in grupo_ordenado.iterrows():
                         conta = cliente["Conta Cliente"]
                         nome = cliente["Nome Cliente"]
                         valor_cc = formatar_brasileiro_whatsapp(cliente["Saldo CC"])
@@ -286,7 +289,8 @@ Você tem o total de {formatar_brasileiro_whatsapp(saldo_cc_total)} em conta.
 É importante trabalhar para alocar antes que o cliente envie para outro banco.
 
 Segue a lista de clientes:
-{lista_clientes}"""
+{lista_clientes}
+A lista completa foi enviada por e-mail."""
 
                     # Preview da mensagem
                     with st.expander(f"📱 Preview da mensagem para {assessor}"):
