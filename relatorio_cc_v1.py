@@ -93,34 +93,57 @@ def enviar_whatsapp(telefone, mensagem):
 def executar():
     st.title("💸 Relatório de Saldo em Conta Corrente")
 
-    st.write("📂 Faça o upload do arquivo:")
-    btg_file = st.file_uploader("Base BTG (Conta + Nome + Assessor + Conta Corrente)", type=["xlsx"])
+    st.write("📂 Faça o upload dos arquivos necessários:")
+    btg_file = st.file_uploader("1️⃣ Base BTG (Conta + Nome + Assessor)", type=["xlsx"])
+    saldo_file = st.file_uploader("2️⃣ Saldo em Conta D0 (Conta + Saldo)", type=["xlsx"])
 
-    if btg_file:
-        # Carregar arquivo
+    if btg_file and saldo_file:
+        # Carregar arquivos
         df_btg = pd.read_excel(btg_file)
+        df_saldo = pd.read_excel(saldo_file)
         
-        # Verificar colunas necessárias
-        colunas_necessarias = ["Conta", "Nome", "Assessor", "Conta Corrente"]
-        colunas_faltando = [col for col in colunas_necessarias if col not in df_btg.columns]
+        # Verificar colunas necessárias na Base BTG
+        colunas_btg_necessarias = ["Conta", "Nome", "Assessor"]
+        colunas_btg_faltando = [col for col in colunas_btg_necessarias if col not in df_btg.columns]
         
-        if colunas_faltando:
-            st.error(f"❌ Colunas faltando no arquivo: {', '.join(colunas_faltando)}")
+        if colunas_btg_faltando:
+            st.error(f"❌ Colunas faltando na Base BTG: {', '.join(colunas_btg_faltando)}")
             st.info(f"📋 Colunas encontradas: {', '.join(df_btg.columns.tolist())}")
+            return
+        
+        # Verificar colunas necessárias no Saldo D0
+        colunas_saldo_necessarias = ["Conta", "Saldo"]
+        colunas_saldo_faltando = [col for col in colunas_saldo_necessarias if col not in df_saldo.columns]
+        
+        if colunas_saldo_faltando:
+            st.error(f"❌ Colunas faltando no Saldo D0: {', '.join(colunas_saldo_faltando)}")
+            st.info(f"📋 Colunas encontradas: {', '.join(df_saldo.columns.tolist())}")
             return
         
         # Renomear para padronizar
         df_btg = df_btg.rename(columns={
             "Conta": "Conta Cliente",
-            "Nome": "Nome Cliente",
-            "Conta Corrente": "Saldo CC"
+            "Nome": "Nome Cliente"
+        })
+        
+        df_saldo = df_saldo.rename(columns={
+            "Conta": "Conta Cliente",
+            "Saldo": "Saldo CC"
         })
         
         # Converter Saldo CC para numérico e preencher valores nulos com 0
-        df_btg["Saldo CC"] = pd.to_numeric(df_btg["Saldo CC"], errors='coerce').fillna(0)
+        df_saldo["Saldo CC"] = pd.to_numeric(df_saldo["Saldo CC"], errors='coerce').fillna(0)
+        
+        # 🔄 Fazer merge entre Base BTG e Saldo D0
+        df_merged = df_btg.merge(df_saldo[["Conta Cliente", "Saldo CC"]], on="Conta Cliente", how="left")
+        
+        # Preencher valores nulos com 0 (caso alguma conta não tenha saldo)
+        df_merged["Saldo CC"] = df_merged["Saldo CC"].fillna(0)
         
         # 🔥 Filtrar clientes com Saldo em Conta diferente de zero
-        df_final = df_btg[df_btg["Saldo CC"] != 0][["Conta Cliente", "Nome Cliente", "Assessor", "Saldo CC"]].copy()
+        df_final = df_merged[df_merged["Saldo CC"] != 0][["Conta Cliente", "Nome Cliente", "Assessor", "Saldo CC"]].copy()
+        
+        st.success(f"✅ Merge realizado! {len(df_btg)} contas na Base BTG × {len(df_saldo)} contas no Saldo D0 = {len(df_final)} clientes com saldo ≠ 0")
         
         # Mapear e-mails dos assessores usando busca inteligente
         def buscar_email_assessor(nome_assessor):
