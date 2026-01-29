@@ -194,8 +194,12 @@ def executar():
                 if modo_teste:
                     email_destino = "rafael@convexainvestimentos.com"
                     primeiro_nome = "Rafael"
-                    telefone_assessor = "5521980039394"  # Seu telefone para teste
                     nome_completo_assessor = "Rafael"
+                    # Telefone apenas se for realmente o Rafael
+                    if dados_assessor:
+                        telefone_assessor = dados_assessor.get("telefone", None)
+                    else:
+                        telefone_assessor = None
                 else:
                     # Email já foi mapeado no dataframe com busca inteligente
                     email_destino = grupo["Email Assessor"].iloc[0]
