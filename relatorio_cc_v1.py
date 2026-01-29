@@ -23,24 +23,70 @@ def formatar_brasileiro_whatsapp(valor):
     """Formata número no padrão brasileiro com R$ (sem HTML para WhatsApp)"""
     return f"R$ {valor:,.2f}".replace(",", "v").replace(".", ",").replace("v", ".")
 
+def buscar_assessor_secrets(nome_assessor, secrets_assessores):
+    """
+    Busca assessor nos secrets de forma inteligente:
+    - Ignora maiúsculas/minúsculas
+    - Busca por nome parcial (ex: "Rafael Dadoorian" encontra "RAFAEL DADOORIAN PREGNOLATI")
+    
+    Retorna: (chave_encontrada, dados_assessor) ou (None, None)
+    """
+    nome_busca = nome_assessor.lower().strip()
+    
+    # Tentar match exato primeiro
+    for chave, dados in secrets_assessores.items():
+        if chave.lower().strip() == nome_busca:
+            return chave, dados
+    
+    # Tentar match parcial (busca palavras do secrets no nome da planilha)
+    for chave, dados in secrets_assessores.items():
+        palavras_chave = chave.lower().split()
+        # Se todas as palavras da chave existem no nome da planilha
+        if all(palavra in nome_busca for palavra in palavras_chave):
+            return chave, dados
+    
+    # Tentar match reverso (busca palavras da planilha no secrets)
+    palavras_busca = nome_busca.split()
+    for chave, dados in secrets_assessores.items():
+        chave_lower = chave.lower()
+        # Se pelo menos 2 palavras da planilha existem na chave
+        matches = sum(1 for palavra in palavras_busca if palavra in chave_lower)
+        if matches >= 2:
+            return chave, dados
+    
+    return None, None
+
 def enviar_whatsapp(telefone, mensagem):
     """Envia mensagem via WhatsApp usando ZAPI"""
     try:
         url = st.secrets["zapi"]["url"]
         headers = {
-            "Client-Token": st.secrets["zapi"]["client_token"]
+            "Client-Token": st.secrets["zapi"]["client_token"],
+            "Content-Type": "application/json"
         }
         payload = {
             "phone": telefone,
             "message": mensagem
         }
         
-        response = requests.post(url, json=payload, headers=headers)
+        # Log do que está sendo enviado
+        st.write(f"🔍 DEBUG - URL: {url}")
+        st.write(f"🔍 DEBUG - Telefone: {telefone}")
+        st.write(f"🔍 DEBUG - Tamanho da mensagem: {len(mensagem)} caracteres")
         
-        if response.status_code == 200:
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        st.write(f"🔍 DEBUG - Status Code: {response.status_code}")
+        st.write(f"🔍 DEBUG - Response: {response.text}")
+        
+        if response.status_code == 200 or response.status_code == 201:
             return True, "Mensagem enviada com sucesso"
         else:
             return False, f"Erro na API: {response.status_code} - {response.text}"
+    except requests.exceptions.Timeout:
+        return False, "Timeout na requisição (30s)"
+    except requests.exceptions.ConnectionError:
+        return False, "Erro de conexão com a API"
     except Exception as e:
         return False, f"Erro ao enviar: {str(e)}"
 
@@ -111,14 +157,15 @@ def executar():
         assessores_com_telefone = []
         assessores_sem_telefone = []
         for assessor in assessores_unicos:
-            telefone = st.secrets["assessores"].get(assessor, {}).get("telefone", None)
-            if telefone:
-                assessores_com_telefone.append(f"{assessor} ({telefone})")
+            chave_assessor, dados_assessor = buscar_assessor_secrets(assessor, st.secrets["assessores"])
+            if dados_assessor and dados_assessor.get("telefone"):
+                telefone = dados_assessor.get("telefone")
+                assessores_com_telefone.append(f"{assessor} → {chave_assessor} ({telefone})")
             else:
                 assessores_sem_telefone.append(assessor)
         
         if assessores_com_telefone:
-            st.success(f"✅ Assessores com telefone cadastrado: {', '.join(assessores_com_telefone)}")
+            st.success(f"✅ Assessores com telefone cadastrado:\n" + "\n".join([f"  • {a}" for a in assessores_com_telefone]))
         if assessores_sem_telefone:
             st.warning(f"⚠️ Assessores SEM telefone cadastrado: {', '.join(assessores_sem_telefone)}")
 
@@ -132,18 +179,38 @@ def executar():
 
             # 🔄 Loop pelos assessores
             for assessor, grupo in df_final.groupby("Assessor"):
+                # 🔍 Buscar assessor nos secrets de forma inteligente
+                chave_assessor, dados_assessor = buscar_assessor_secrets(assessor, st.secrets["assessores"])
+                
                 # 🔥 Se modo_teste=True, envia tudo para Rafael
                 if modo_teste:
                     email_destino = "rafael@convexainvestimentos.com"
                     primeiro_nome = "Rafael"
                     telefone_assessor = "5521980039394"  # Seu telefone para teste
+                    nome_completo_assessor = "Rafael"
                 else:
-                    email_destino = grupo["Email Assessor"].iloc[0]
+                    # Buscar email (tentar busca inteligente primeiro)
+                    email_destino = None
+                    if chave_assessor:
+                        # Buscar email usando a chave encontrada
+                        email_destino = st.secrets["emails_assessores"].get(chave_assessor)
+                    
+                    # Se não encontrou, tentar busca direta
+                    if not email_destino:
+                        email_destino = st.secrets["emails_assessores"].get(assessor)
+                    
                     # Pegar primeiro nome do assessor
                     primeiro_nome = assessor.strip().split()[0].capitalize()
-                    # Buscar telefone e nome completo no secrets
-                    telefone_assessor = st.secrets["assessores"].get(assessor, {}).get("telefone", None)
-                    nome_completo_assessor = st.secrets["assessores"].get(assessor, {}).get("nome", primeiro_nome)
+                    
+                    # Buscar telefone e nome completo
+                    if dados_assessor:
+                        telefone_assessor = dados_assessor.get("telefone", None)
+                        nome_completo_assessor = dados_assessor.get("nome", primeiro_nome)
+                        st.info(f"✅ Assessor '{assessor}' mapeado para '{chave_assessor}' nos secrets")
+                    else:
+                        telefone_assessor = None
+                        nome_completo_assessor = primeiro_nome
+                        st.warning(f"⚠️ Assessor '{assessor}' não encontrado nos secrets")
 
                 if pd.isna(email_destino):
                     st.warning(f"⚠️ Assessor {assessor} sem e-mail definido. Pulando envio.")
@@ -217,6 +284,10 @@ Você tem o total de {formatar_brasileiro_whatsapp(saldo_cc_total)} em conta.
 Segue a lista de clientes:
 {lista_clientes}"""
 
+                    # Preview da mensagem
+                    with st.expander(f"📱 Preview da mensagem para {assessor}"):
+                        st.text(mensagem_whatsapp)
+                    
                     st.info(f"📱 Tentando enviar WhatsApp para {assessor} no número {telefone_assessor}...")
                     
                     # Enviar via ZAPI
