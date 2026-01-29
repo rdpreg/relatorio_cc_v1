@@ -258,3 +258,8 @@ Segue a lista de clientes:
             # 📊 Resumo final
             st.info(f"✅ {enviados_email} e-mails enviados com sucesso.")
             st.info(f"✅ {enviados_whatsapp} mensagens WhatsApp enviadas com sucesso.")
+
+
+# Executar o aplicativo
+if __name__ == "__main__":
+    executar()
