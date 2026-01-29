@@ -177,7 +177,7 @@ def executar():
         if assessores_sem_telefone:
             st.warning(f"⚠️ Assessores SEM telefone cadastrado: {', '.join(assessores_sem_telefone)}")
 
-        if st.button("📧 Enviar e-mails e WhatsApp aos assessores"):
+        if st.button("📱 Testar envio de WhatsApp (emails desabilitados)"):
             email_remetente = st.secrets["email"]["remetente"]
             senha_app = st.secrets["email"]["senha_app"]
             data_hoje = datetime.now().strftime("%d-%m-%Y")
@@ -255,16 +255,18 @@ def executar():
                 anexo["Content-Disposition"] = f'attachment; filename="{nome_arquivo}"'
                 msg.attach(anexo)
 
-                # 📧 ENVIAR EMAIL
-                try:
-                    with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-                        smtp.starttls()
-                        smtp.login(email_remetente, senha_app)
-                        smtp.send_message(msg)
-                    enviados_email += 1
-                    st.success(f"📨 E-mail enviado para {assessor} ({email_destino})")
-                except Exception as e:
-                    st.error(f"❌ Erro ao enviar e-mail para {assessor}: {e}")
+                # 📧 ENVIAR EMAIL - DESABILITADO PARA TESTE
+                # try:
+                #     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+                #         smtp.starttls()
+                #         smtp.login(email_remetente, senha_app)
+                #         smtp.send_message(msg)
+                #     enviados_email += 1
+                #     st.success(f"📨 E-mail enviado para {assessor} ({email_destino})")
+                # except Exception as e:
+                #     st.error(f"❌ Erro ao enviar e-mail para {assessor}: {e}")
+                
+                st.info(f"📧 Envio de e-mail desabilitado (modo teste WhatsApp)")
 
                 # 📱 ENVIAR WHATSAPP
                 if telefone_assessor:
@@ -302,48 +304,50 @@ Segue a lista de clientes:
                 else:
                     st.warning(f"⚠️ Assessor {assessor} sem telefone definido no secrets. Pulando envio de WhatsApp.")
 
-            # ✅ Enviar relatório consolidado para Rafael (EMAIL)
-            try:
-                # 🧮 Resumo consolidado geral
-                saldo_cc_total = df_final["Saldo CC"].sum()
-                total_clientes = len(df_final)
+            # ✅ Enviar relatório consolidado para Rafael (EMAIL) - DESABILITADO PARA TESTE
+            # try:
+            #     # 🧮 Resumo consolidado geral
+            #     saldo_cc_total = df_final["Saldo CC"].sum()
+            #     total_clientes = len(df_final)
 
-                resumo_geral_html = f"""
-                <p>Olá Rafael,</p>
-                <p>Segue o relatório consolidado com todos os dados enviados aos assessores:</p>
-                <ul>
-                    <li><strong>Total de clientes:</strong> {total_clientes}</li>
-                    <li><strong>Saldo total em Conta:</strong> {formatar_brasileiro(saldo_cc_total)}</li>
-                </ul>
-                <p>Relatório detalhado em anexo.</p>
-                """
+            #     resumo_geral_html = f"""
+            #     <p>Olá Rafael,</p>
+            #     <p>Segue o relatório consolidado com todos os dados enviados aos assessores:</p>
+            #     <ul>
+            #         <li><strong>Total de clientes:</strong> {total_clientes}</li>
+            #         <li><strong>Saldo total em Conta:</strong> {formatar_brasileiro(saldo_cc_total)}</li>
+            #     </ul>
+            #     <p>Relatório detalhado em anexo.</p>
+            #     """
 
-                output_consolidado = io.BytesIO()
-                df_final.drop(columns=["Email Assessor"]).to_excel(output_consolidado, index=False)
-                output_consolidado.seek(0)
+            #     output_consolidado = io.BytesIO()
+            #     df_final.drop(columns=["Email Assessor"]).to_excel(output_consolidado, index=False)
+            #     output_consolidado.seek(0)
 
-                # 📎 Nome do arquivo consolidado com data
-                nome_arquivo_consolidado = f"Saldo_em_Conta_Consolidado_{data_hoje}.xlsx"
+            #     # 📎 Nome do arquivo consolidado com data
+            #     nome_arquivo_consolidado = f"Saldo_em_Conta_Consolidado_{data_hoje}.xlsx"
 
-                msg_resumo = MIMEMultipart()
-                msg_resumo["From"] = email_remetente
-                msg_resumo["To"] = "rafael@convexainvestimentos.com"
-                msg_resumo["Subject"] = f"📊 Relatório Consolidado – {data_hoje}"
+            #     msg_resumo = MIMEMultipart()
+            #     msg_resumo["From"] = email_remetente
+            #     msg_resumo["To"] = "rafael@convexainvestimentos.com"
+            #     msg_resumo["Subject"] = f"📊 Relatório Consolidado – {data_hoje}"
 
-                msg_resumo.attach(MIMEText(resumo_geral_html, "html"))
-                anexo_resumo = MIMEApplication(output_consolidado.read(), Name=nome_arquivo_consolidado)
-                anexo_resumo["Content-Disposition"] = f'attachment; filename="{nome_arquivo_consolidado}"'
-                msg_resumo.attach(anexo_resumo)
+            #     msg_resumo.attach(MIMEText(resumo_geral_html, "html"))
+            #     anexo_resumo = MIMEApplication(output_consolidado.read(), Name=nome_arquivo_consolidado)
+            #     anexo_resumo["Content-Disposition"] = f'attachment; filename="{nome_arquivo_consolidado}"'
+            #     msg_resumo.attach(anexo_resumo)
 
-                with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
-                    smtp.starttls()
-                    smtp.login(email_remetente, senha_app)
-                    smtp.send_message(msg_resumo)
+            #     with smtplib.SMTP("smtp.gmail.com", 587) as smtp:
+            #         smtp.starttls()
+            #         smtp.login(email_remetente, senha_app)
+            #         smtp.send_message(msg_resumo)
 
-                st.success("📨 Relatório consolidado enviado para rafael@convexainvestimentos.com.")
+            #     st.success("📨 Relatório consolidado enviado para rafael@convexainvestimentos.com.")
 
-            except Exception as e:
-                st.error(f"❌ Erro ao enviar relatório consolidado: {e}")
+            # except Exception as e:
+            #     st.error(f"❌ Erro ao enviar relatório consolidado: {e}")
+            
+            st.info("📧 Envio de relatório consolidado desabilitado (modo teste WhatsApp)")
 
             # 📊 Resumo final
             st.info(f"✅ {enviados_email} e-mails enviados com sucesso.")
