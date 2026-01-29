@@ -128,9 +128,24 @@ def executar():
             "Saldo CC", "D+1", "D+2", "D+3", "Saldo Projetado"
         ]]
 
-        # Mapear e-mails dos assessores
-        emails_assessores = st.secrets["emails_assessores"]
-        df_final["Email Assessor"] = df_final["Assessor"].map(emails_assessores)
+        # Mapear e-mails dos assessores usando busca inteligente
+        def buscar_email_assessor(nome_assessor):
+            """Busca email usando a mesma lógica inteligente"""
+            emails = st.secrets["emails_assessores"]
+            
+            # Tentar busca direta primeiro
+            if nome_assessor in emails:
+                return emails[nome_assessor]
+            
+            # Usar a função de busca inteligente
+            chave_encontrada, _ = buscar_assessor_secrets(nome_assessor, 
+                                                          {k: {"dummy": "data"} for k in emails.keys()})
+            if chave_encontrada and chave_encontrada in emails:
+                return emails[chave_encontrada]
+            
+            return None
+        
+        df_final["Email Assessor"] = df_final["Assessor"].apply(buscar_email_assessor)
 
         # 🖥️ Formatar valores no padrão brasileiro e aplicar cores (para exibir no app)
         df_formatado = df_final.copy()
@@ -189,15 +204,8 @@ def executar():
                     telefone_assessor = "5521980039394"  # Seu telefone para teste
                     nome_completo_assessor = "Rafael"
                 else:
-                    # Buscar email (tentar busca inteligente primeiro)
-                    email_destino = None
-                    if chave_assessor:
-                        # Buscar email usando a chave encontrada
-                        email_destino = st.secrets["emails_assessores"].get(chave_assessor)
-                    
-                    # Se não encontrou, tentar busca direta
-                    if not email_destino:
-                        email_destino = st.secrets["emails_assessores"].get(assessor)
+                    # Email já foi mapeado no dataframe com busca inteligente
+                    email_destino = grupo["Email Assessor"].iloc[0]
                     
                     # Pegar primeiro nome do assessor
                     primeiro_nome = assessor.strip().split()[0].capitalize()
