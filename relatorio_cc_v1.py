@@ -102,6 +102,25 @@ def executar():
         st.markdown(tabela_com_scroll, unsafe_allow_html=True)
 
         st.success(f"✅ {df_final.shape[0]} clientes com Saldo Projetado ≠ 0 processados com sucesso.")
+        
+        # 🔍 Debug: Mostrar assessores únicos encontrados
+        assessores_unicos = df_final["Assessor"].unique()
+        st.info(f"📋 Assessores encontrados no arquivo: {', '.join(assessores_unicos)}")
+        
+        # 🔍 Debug: Verificar se há telefones cadastrados
+        assessores_com_telefone = []
+        assessores_sem_telefone = []
+        for assessor in assessores_unicos:
+            telefone = st.secrets["assessores"].get(assessor, {}).get("telefone", None)
+            if telefone:
+                assessores_com_telefone.append(f"{assessor} ({telefone})")
+            else:
+                assessores_sem_telefone.append(assessor)
+        
+        if assessores_com_telefone:
+            st.success(f"✅ Assessores com telefone cadastrado: {', '.join(assessores_com_telefone)}")
+        if assessores_sem_telefone:
+            st.warning(f"⚠️ Assessores SEM telefone cadastrado: {', '.join(assessores_sem_telefone)}")
 
         if st.button("📧 Enviar e-mails e WhatsApp aos assessores"):
             email_remetente = st.secrets["email"]["remetente"]
@@ -198,15 +217,17 @@ Você tem o total de {formatar_brasileiro_whatsapp(saldo_cc_total)} em conta.
 Segue a lista de clientes:
 {lista_clientes}"""
 
+                    st.info(f"📱 Tentando enviar WhatsApp para {assessor} no número {telefone_assessor}...")
+                    
                     # Enviar via ZAPI
                     sucesso, msg_retorno = enviar_whatsapp(telefone_assessor, mensagem_whatsapp)
                     if sucesso:
                         enviados_whatsapp += 1
-                        st.success(f"📱 WhatsApp enviado para {assessor} ({telefone_assessor})")
+                        st.success(f"✅ WhatsApp enviado para {assessor} ({telefone_assessor})")
                     else:
                         st.error(f"❌ Erro ao enviar WhatsApp para {assessor}: {msg_retorno}")
                 else:
-                    st.warning(f"⚠️ Assessor {assessor} sem telefone definido. Pulando envio de WhatsApp.")
+                    st.warning(f"⚠️ Assessor {assessor} sem telefone definido no secrets. Pulando envio de WhatsApp.")
 
             # ✅ Enviar relatório consolidado para Rafael (EMAIL)
             try:
@@ -258,7 +279,6 @@ Segue a lista de clientes:
             # 📊 Resumo final
             st.info(f"✅ {enviados_email} e-mails enviados com sucesso.")
             st.info(f"✅ {enviados_whatsapp} mensagens WhatsApp enviadas com sucesso.")
-
 
 # Executar o aplicativo
 if __name__ == "__main__":
