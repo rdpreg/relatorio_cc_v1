@@ -10,7 +10,7 @@ import io
 import requests
 
 # 🔥 Flag para alternar entre teste e produção
-modo_teste = False  # True = envia só para Rafael; False = envia para os assessores
+modo_teste = True  # True = envia só para Rafael; False = envia para os assessores
 
 def formatar_brasileiro(valor):
     """Formata número no padrão brasileiro com R$"""
@@ -91,43 +91,37 @@ def enviar_whatsapp(telefone, mensagem):
         return False, f"Erro ao enviar: {str(e)}"
 
 def executar():
-    st.title("💸 Envio de Fluxo Financeiro (Produção)")
+    st.title("💸 Relatório de Saldo em Conta Corrente")
 
-    st.write("📂 Faça o upload dos arquivos necessários:")
-    btg_file = st.file_uploader("1️⃣ Base BTG (conta + assessor)", type=["xlsx"])
-    saldo_file = st.file_uploader("2️⃣ Saldo D0 + Valores a Receber Projetados (RF + VT)", type=["xlsx"])
+    st.write("📂 Faça o upload do arquivo:")
+    btg_file = st.file_uploader("Base BTG (Conta + Nome + Assessor + Conta Corrente)", type=["xlsx"])
 
-    if btg_file and saldo_file:
-        # Carregar bases
+    if btg_file:
+        # Carregar arquivo
         df_btg = pd.read_excel(btg_file)
-        df_saldo = pd.read_excel(saldo_file)
-
-        # Padronizar colunas
-        df_btg = df_btg.rename(columns={"Conta": "Conta Cliente", "Nome": "Nome Cliente"})
-        df_saldo = df_saldo.rename(columns={"Conta": "Conta Cliente", "Saldo": "Saldo CC"})
-
-        # Mesclar dados
-        df_merged = df_btg.merge(df_saldo, on="Conta Cliente", how="left")
-
-        # Preencher valores nulos com 0
-        df_merged.fillna(0, inplace=True)
-
-        # Calcular coluna Saldo Projetado
-        df_merged["Saldo Projetado"] = (
-            df_merged["Saldo CC"] +
-            df_merged["D+1"] +
-            df_merged["D+2"] +
-            df_merged["D+3"]
-        )
-
-        # 🔥 Filtrar clientes com Saldo Projetado diferente de zero
-        df_final = df_merged[
-            df_merged["Saldo Projetado"] != 0
-        ][[
-            "Conta Cliente", "Nome Cliente", "Assessor",
-            "Saldo CC", "D+1", "D+2", "D+3", "Saldo Projetado"
-        ]]
-
+        
+        # Verificar colunas necessárias
+        colunas_necessarias = ["Conta", "Nome", "Assessor", "Conta Corrente"]
+        colunas_faltando = [col for col in colunas_necessarias if col not in df_btg.columns]
+        
+        if colunas_faltando:
+            st.error(f"❌ Colunas faltando no arquivo: {', '.join(colunas_faltando)}")
+            st.info(f"📋 Colunas encontradas: {', '.join(df_btg.columns.tolist())}")
+            return
+        
+        # Renomear para padronizar
+        df_btg = df_btg.rename(columns={
+            "Conta": "Conta Cliente",
+            "Nome": "Nome Cliente",
+            "Conta Corrente": "Saldo CC"
+        })
+        
+        # Converter Saldo CC para numérico e preencher valores nulos com 0
+        df_btg["Saldo CC"] = pd.to_numeric(df_btg["Saldo CC"], errors='coerce').fillna(0)
+        
+        # 🔥 Filtrar clientes com Saldo em Conta diferente de zero
+        df_final = df_btg[df_btg["Saldo CC"] != 0][["Conta Cliente", "Nome Cliente", "Assessor", "Saldo CC"]].copy()
+        
         # Mapear e-mails dos assessores usando busca inteligente
         def buscar_email_assessor(nome_assessor):
             """Busca email usando a mesma lógica inteligente"""
@@ -146,14 +140,13 @@ def executar():
             return None
         
         df_final["Email Assessor"] = df_final["Assessor"].apply(buscar_email_assessor)
-
+        
         # 🖥️ Formatar valores no padrão brasileiro e aplicar cores (para exibir no app)
         df_formatado = df_final.copy()
-        for col in ["Saldo CC", "D+1", "D+2", "D+3", "Saldo Projetado"]:
-            df_formatado[col] = df_formatado[col].apply(formatar_brasileiro)
-
+        df_formatado["Saldo CC"] = df_formatado["Saldo CC"].apply(formatar_brasileiro)
+        
         # Exibir tabela com scroll e formatação
-        st.subheader("📊 Dados Processados (Saldo Projetado ≠ 0)")
+        st.subheader("📊 Dados Processados (Saldo em Conta ≠ 0)")
         tabela_html = df_formatado.drop(columns=["Email Assessor"]).to_html(escape=False, index=False)
         tabela_com_scroll = f"""
         <div style="overflow:auto; max-height:500px; border:1px solid #ddd; padding:8px">
@@ -161,8 +154,8 @@ def executar():
         </div>
         """
         st.markdown(tabela_com_scroll, unsafe_allow_html=True)
-
-        st.success(f"✅ {df_final.shape[0]} clientes com Saldo Projetado ≠ 0 processados com sucesso.")
+        
+        st.success(f"✅ {df_final.shape[0]} clientes com Saldo em Conta ≠ 0 processados.")
         
         # 🔍 Debug: Mostrar assessores únicos encontrados
         assessores_unicos = df_final["Assessor"].unique()
@@ -226,19 +219,16 @@ def executar():
 
                 # 🧮 Resumo consolidado do assessor (EMAIL)
                 saldo_cc_total = grupo["Saldo CC"].sum()
-                saldo_d1_total = grupo["D+1"].sum()
-                saldo_d2_total = grupo["D+2"].sum()
-                saldo_d3_total = grupo["D+3"].sum()
+                total_clientes = len(grupo)
 
                 resumo_html = f"""
                 <p>Olá {primeiro_nome},</p>
-                <p>Aqui estão os dados de Saldo em Conta consolidados. O relatório detalhado está em anexo.</p>
+                <p>Aqui está o resumo de Saldo em Conta Corrente dos seus clientes:</p>
                 <ul>
-                    <li><strong>Saldo em Conta:</strong> {formatar_brasileiro(saldo_cc_total)}</li>
-                    <li><strong>Saldo a entrar em D+1:</strong> {formatar_brasileiro(saldo_d1_total)}</li>
-                    <li><strong>Saldo a entrar em D+2:</strong> {formatar_brasileiro(saldo_d2_total)}</li>
-                    <li><strong>Saldo a entrar em D+3:</strong> {formatar_brasileiro(saldo_d3_total)}</li>
+                    <li><strong>Total de clientes:</strong> {total_clientes}</li>
+                    <li><strong>Saldo total em Conta:</strong> {formatar_brasileiro(saldo_cc_total)}</li>
                 </ul>
+                <p>O relatório detalhado com a lista de clientes está em anexo.</p>
                 <p>Abraços,<br>Equipe Convexa</p>
                 """
 
@@ -254,7 +244,7 @@ def executar():
                 msg = MIMEMultipart()
                 msg["From"] = formataddr(("Backoffice Convexa", email_remetente))
                 msg["To"] = email_destino
-                msg["Subject"] = f"📩 Fluxo Financeiro – {data_hoje}"
+                msg["Subject"] = f"📩 Saldo em Conta Corrente – {data_hoje}"
 
                 msg.attach(MIMEText(resumo_html, "html"))
                 anexo = MIMEApplication(output.read(), Name=nome_arquivo)
@@ -312,18 +302,14 @@ Segue a lista de clientes:
             try:
                 # 🧮 Resumo consolidado geral
                 saldo_cc_total = df_final["Saldo CC"].sum()
-                saldo_d1_total = df_final["D+1"].sum()
-                saldo_d2_total = df_final["D+2"].sum()
-                saldo_d3_total = df_final["D+3"].sum()
+                total_clientes = len(df_final)
 
                 resumo_geral_html = f"""
                 <p>Olá Rafael,</p>
                 <p>Segue o relatório consolidado com todos os dados enviados aos assessores:</p>
                 <ul>
-                    <li><strong>Saldo em Conta:</strong> {formatar_brasileiro(saldo_cc_total)}</li>
-                    <li><strong>Saldo em D+1:</strong> {formatar_brasileiro(saldo_d1_total)}</li>
-                    <li><strong>Saldo em D+2:</strong> {formatar_brasileiro(saldo_d2_total)}</li>
-                    <li><strong>Saldo em D+3:</strong> {formatar_brasileiro(saldo_d3_total)}</li>
+                    <li><strong>Total de clientes:</strong> {total_clientes}</li>
+                    <li><strong>Saldo total em Conta:</strong> {formatar_brasileiro(saldo_cc_total)}</li>
                 </ul>
                 <p>Relatório detalhado em anexo.</p>
                 """
@@ -333,7 +319,7 @@ Segue a lista de clientes:
                 output_consolidado.seek(0)
 
                 # 📎 Nome do arquivo consolidado com data
-                nome_arquivo_consolidado = f"Saldo_em_Conta_{data_hoje}.xlsx"
+                nome_arquivo_consolidado = f"Saldo_em_Conta_Consolidado_{data_hoje}.xlsx"
 
                 msg_resumo = MIMEMultipart()
                 msg_resumo["From"] = email_remetente
